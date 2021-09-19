@@ -12,113 +12,116 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+class HTTPReqParserException(Exception):
+
+    def __init__(self, message=""):
+        self.message = message
+
+class MethodNotAllowed(HTTPReqParserException):
+    pass
+
+class UnsupportedHTTPVer(HTTPReqParserException):
+    pass
+
+class UnsupportedPath(HTTPReqParserException):
+    pass
+
+class BadRequest(HTTPReqParserException):
+    pass
+
 class HttpReqParser:
     methodname = "HTTP_METHOD"
     pathname = "PATH"
     httpvername = "HTTP_VER"
     hostname = "HOST"
     agentname = "AGENT"
-    accepname = "ACCEPT"
-    fields = ["Host", "User-Agent", "Accept"]
-
-    METHOD_ERR = "Wrong method"
-    PATH_ERR = "Wrong path"
-    HTTPVER_ERR = "Wrong http version"
-    FIELD_ERR = "Required field not specified"
-    PARSE_ERR = "Parsing error"
+    acceptname = "ACCEPT"
 
     @classmethod
     def parse(cls, unparsed_data):
         parsed_data = {}
 
-        # decode unparsed data
+        # Check for empty byte string
+        if not unparsed_data:
+            raise BadRequest
+
+        # Decode unparsed data
         decoded_u_data = unparsed_data.decode("utf-8")
         decoded_u_data += "\r\n\r\n"
 
-        try:
-            # check method is GET
-            decoded_u_data = cls.check_strip(
-                decoded_u_data,
-                "GET",
-                cls.METHOD_ERR, 
-                strip_end=" "
-            )
-
-            parsed_data[cls.methodname] = True
-            
-            # get path
-            path = cls.get_substr(
-                decoded_u_data,
-                " ",
-                cls.PATH_ERR
-            )
-
-            if path[0] != "/":
-                raise Exception(cls.PATH_ERR)
-            
-            parsed_data[cls.pathname] = path
-            decoded_u_data = decoded_u_data.replace(path + " ", "", 1)
-
-            # check http version
-            decoded_u_data, http_ver = cls.check_strip_multi(
-                decoded_u_data,
-                ["HTTP/1.1", "HTTP/1.0"],
-                cls.HTTPVER_ERR
-            )
-
-            parsed_data[cls.httpvername] = http_ver
-
-            # check line ending for first line in header
-            decoded_u_data = cls.check_strip(
-                decoded_u_data,
-                "\r\n",
-                cls.PARSE_ERR
-            )
-
-            # get field values (Host, User-Agent, Accept)
-            for field in cls.fields:
-                decoded_u_data, field_value = cls.get_field(
-                    decoded_u_data,
-                    field
-                )
-
-                if field == "Accept":
-                    field_value = field_value.split(",")
-
-                parsed_data[field.upper()] = field_value
-
-            return parsed_data
+        # Split over CR-LF
+        splitted_data = decoded_u_data.split("\r\n")
+        splitted_data_len = len(splitted_data)
         
-        except Exception as e:
-            raise e
+        start_line = splitted_data[0]
+        
+        # Check method name
+        start_line = cls.check_strip(
+            start_line,
+            "GET",
+            MethodNotAllowed,
+            strip_end=" "
+        )
+        parsed_data[cls.methodname] = True
+
+        # Get path
+        path = cls.get_substr(
+            start_line,
+            " ",
+            UnsupportedPath
+        )
+
+        if path[0] != "/":
+            raise UnsupportedPath
+
+        start_line = start_line.replace(path+" ", "", 1)
+        parsed_data[cls.pathname] = path
+        
+        # Check HTTP version
+        start_line, http_ver = cls.check_strip_multi(
+            start_line,
+            ["HTTP/1.1", "HTTP/1.0"],
+            UnsupportedHTTPVer,
+            strip_end=" "
+        )
+
+        if splitted_data_len == 1 and http_ver == "HTTP/1.0":
+            raise BadRequest
+
+        parsed_data[cls.httpvername] = http_ver
+
+        fields = splitted_data[1:]
+
+        # Get host
+        host = cls.get_field(fields, "Host")
+        if host is None:
+            raise BadRequest
+
+        parsed_data[cls.hostname] = host
+
+        # Get some other fields (Accept, User-Agent)
+        accept = cls.get_field(fields, "Accept")
+        agent = cls.get_field(fields, "User-Agent")
+
+        parsed_data[cls.acceptname] = accept
+        parsed_data[cls.agentname] = agent
+
+        return parsed_data
 
     @classmethod
-    def get_field(cls, target_str, field, end="\r\n"):
-        try:
-            error = cls.FIELD_ERR
-            target_str = cls.check_strip(
-                target_str,
-                field + ":",
-                error,
-                strip_end=" "
-            )
-            
-            field_value = cls.get_substr(
-                target_str,
-                "\r",
-                error
-            )
+    def get_field(cls, fields, field_str, end="\r\n"):
+        for field in fields:
+            splitted_field = field.split(": ")
+            if field_str == splitted_field[0]:
+                return splitted_field[1]
 
-            return target_str.replace(field_value + end, "", 1), field_value
-
-        except Exception as e:
-            raise Exception(error + ": " + field)
+        return None           
 
     @classmethod
     def check_strip(cls, target_str, check_str, error,
         strip_end="", index=0):
         if target_str.find(check_str) != index:
-            raise Exception(error)
+            raise error
 
         return target_str.replace(check_str + strip_end, "", 1)
 
@@ -139,9 +142,9 @@ class HttpReqParser:
 
                 return stripped_target_str, check_str
 
-            except Exception as e:
+            except HTTPReqParserException:
                 if count == target_str_len:
-                    raise e
+                    raise error
 
     @classmethod
     def get_substr(cls, target_str, end, error):
@@ -153,7 +156,7 @@ class HttpReqParser:
             
             substr += char
 
-        raise Exception(error)
+        raise error
 
 # if __name__ == "__main__":
 #     request = b"GET / HTTP/1.1\r\nHost: slashdot.org\r\nAccept: python\r\nAgent: text/html\r\n\r\n"

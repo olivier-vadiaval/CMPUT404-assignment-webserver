@@ -33,12 +33,12 @@ class ResourceLocator:
             path += cls.index_f
 
         full_path = join(root + path)
-        print("path", path)
-        print("full path", full_path)
-        print("root", root)
-        print("abspath full_path", abspath(full_path))
-        print("abspath root", abspath(root))
-        print("root not in abspath full_path", root not in abspath(full_path))
+        # print("path", path)
+        # print("full path", full_path)
+        # print("root", root)
+        # print("abspath full_path", abspath(full_path))
+        # print("abspath root", abspath(root))
+        # print("root not in abspath full_path", root not in abspath(full_path))
 
         if abspath(root) not in abspath(full_path):
             return 404, "", None

@@ -26,7 +26,7 @@ import socketserver
 
 # try: curl -v -X GET http://127.0.0.1:8080/
 
-from http_req_parser import HttpReqParser
+from http_req_parser import *
 from resource_locator import ResourceLocator
 from datetime import datetime
 from os.path import join
@@ -35,13 +35,14 @@ class MyWebServer(socketserver.BaseRequestHandler):
 
     basepath = "www"
     baseurl = "http://127.0.0.1:8080"
+    default_http_ver = "HTTP/1.1"
 
     def setup(self):
         self.httpvername = HttpReqParser.httpvername
         self.pathname = HttpReqParser.pathname
         self.hostname = HttpReqParser.hostname
         self.agentname = HttpReqParser.agentname
-        self.acceptname = HttpReqParser.accepname
+        self.acceptname = HttpReqParser.acceptname
     
     def handle(self):
         self.data = self.request.recv(4096).strip()
@@ -49,9 +50,11 @@ class MyWebServer(socketserver.BaseRequestHandler):
         # self.request.sendall(bytearray("OK",'utf-8'))
 
         code = -1
-        http_version = ""
+        http_version = self.default_http_ver
         payload = ""
         content_type = None
+        extra_fields = []
+        
         try:
             parsed_data = HttpReqParser.parse(self.data)
             http_version = parsed_data[self.httpvername]
@@ -59,21 +62,11 @@ class MyWebServer(socketserver.BaseRequestHandler):
             host = parsed_data[self.hostname]
             accept = parsed_data[self.acceptname]
             
-        except Exception as e:
-            if self.data and HttpReqParser.METHOD_ERR in e.args[0]:
-                code = 405
-                payload = ""
-            
-            else:
-                code = 400
-                payload = ""
-
-            http_version = "HTTP/1.1"
+        except HTTPReqParserException as e:
+            code = self.mapExceptionToCode(e)
 
         else:
             code, payload, content_type = ResourceLocator.find(path, self.basepath)
-        
-        extra_fields = []
 
         # if code is 301, payload contains corrected path
         if code == 301:
@@ -85,13 +78,16 @@ class MyWebServer(socketserver.BaseRequestHandler):
         # check for accepted content-type
         if content_type is not None:
             content_type = "text/" + content_type
-            print(content_type)
-            print(accept)
-            if content_type not in accept and "*/*" not in accept:
+
+            if accept is None:
+                accept = "*/*"
+            
+            elif content_type not in accept and "*/*" not in accept:
                 code = 406
                 payload = ""
 
         if code != 200:
+            # An error occurred, Not 200 OK, Empty payload
             res = self.template_res(False, extra_fields)
             res = res.format(
                 http_ver=http_version,
@@ -100,6 +96,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
             )
 
         else:
+            # 200 OK, payload is Not empty
             res = self.template_res(more=extra_fields)
             res = res.format(
                 http_ver=http_version,
@@ -109,13 +106,26 @@ class MyWebServer(socketserver.BaseRequestHandler):
                 payload=payload
             )
 
-        print("="*30)
-        print(self.data)
-        print("_"*40)
-        print(res)
-        print("="*30)
+        # print("="*30)
+        # print(self.data)
+        # print("_"*40)
+        # print(res)
+        # print("="*30)
 
         self.request.sendall(bytearray(res, "utf-8"))
+
+    def mapExceptionToCode(self, error):
+        if type(error) is MethodNotAllowed:
+            return 405
+
+        if type(error) is UnsupportedHTTPVer:
+            return 505
+
+        if type(error) is UnsupportedPath:
+            return 404
+
+        if type(error) is BadRequest:
+            return 400
 
     def get_status_str(self, status_code):
         if status_code == 200:
@@ -135,6 +145,9 @@ class MyWebServer(socketserver.BaseRequestHandler):
 
         if status_code == 400:
             return "400 Bad Request"
+
+        if status_code == 505:
+            return "505 HTTP Version Not Supported"
 
     def create_field(self, field_name, field_value):
         return field_name + ": " + field_value + "\r\n"

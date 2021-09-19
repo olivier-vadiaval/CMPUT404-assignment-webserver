@@ -27,80 +27,137 @@ import socketserver
 # try: curl -v -X GET http://127.0.0.1:8080/
 
 from http_req_parser import HttpReqParser
-from datetime import date
+from resource_locator import ResourceLocator
+from datetime import datetime
 from os.path import join
 
 class MyWebServer(socketserver.BaseRequestHandler):
 
-    basepath = "./www"
-    index = join(basepath, "index.html")
-    basecss = join(basepath, "base.css")
+    basepath = "www"
+    baseurl = "http://127.0.0.1:8080"
+
+    def setup(self):
+        self.httpvername = HttpReqParser.httpvername
+        self.pathname = HttpReqParser.pathname
+        self.hostname = HttpReqParser.hostname
+        self.agentname = HttpReqParser.agentname
+        self.acceptname = HttpReqParser.accepname
     
     def handle(self):
         self.data = self.request.recv(4096).strip()
         # print ("Got a request of: %s\n" % self.data)
         # self.request.sendall(bytearray("OK",'utf-8'))
 
-        res = self.template_res()
-
-        httpvername = HttpReqParser.httpvername
-        pathname = HttpReqParser.pathname
-        hostname = HttpReqParser.hostname
-        agentname = HttpReqParser.agentname
-        acceptname = HttpReqParser.accepname
-
+        code = -1
+        http_version = ""
+        payload = ""
+        content_type = None
         try:
             parsed_data = HttpReqParser.parse(self.data)
-            http_version = parsed_data[httpvername]
-            path = parsed_data[pathname]
-            host = parsed_data[hostname]
-            accept = parsed_data[acceptname]
-
-            if path == "/" or path == "/index.html":
-                index_f = open(self.index)
-                payload = index_f.read()
-
-                res = res.format(
-                    http_ver=http_version, 
-                    status=self.get_status_str(200), 
-                    content_type="text/html",
-                    payload=payload
-                )
-
-            if path == "/base.css":
-                css_f = open(self.basecss)
-                payload = css_f.readlines()
-
-                res = res.format(
-                    http_ver=http_version,
-                    status=self.get_status_str(200),
-                    content_type="text/css",
-                    payload=payload
-                )
-
-
-            self.request.sendall(bytearray(res, "utf-8"))
-
+            http_version = parsed_data[self.httpvername]
+            path = parsed_data[self.pathname]
+            host = parsed_data[self.hostname]
+            accept = parsed_data[self.acceptname]
+            
         except Exception as e:
-            print(e.args)
-    
+            if self.data and HttpReqParser.METHOD_ERR in e.args[0]:
+                code = 405
+                payload = ""
+            
+            else:
+                code = 400
+                payload = ""
+
+            http_version = "HTTP/1.1"
+
+        else:
+            code, payload, content_type = ResourceLocator.find(path, self.basepath)
+        
+        extra_fields = []
+
+        # if code is 301, payload contains corrected path
+        if code == 301:
+            corrected_path = self.baseurl + payload
+            payload = ""
+            location = self.create_field("Location", corrected_path)
+            extra_fields.append(location)
+
+        # check for accepted content-type
+        if content_type is not None:
+            content_type = "text/" + content_type
+            print(content_type)
+            print(accept)
+            if content_type not in accept and "*/*" not in accept:
+                code = 406
+                payload = ""
+
+        if code != 200:
+            res = self.template_res(False, extra_fields)
+            res = res.format(
+                http_ver=http_version,
+                status=self.get_status_str(code),
+                payload=payload
+            )
+
+        else:
+            res = self.template_res(more=extra_fields)
+            res = res.format(
+                http_ver=http_version,
+                status=self.get_status_str(code),
+                content_type=content_type,
+                content_length=len(payload),
+                payload=payload
+            )
+
+        print("="*30)
+        print(self.data)
+        print("_"*40)
+        print(res)
+        print("="*30)
+
+        self.request.sendall(bytearray(res, "utf-8"))
+
     def get_status_str(self, status_code):
         if status_code == 200:
             return "200 OK"
+        
+        if status_code == 406:
+            return "406 Not Acceptable"
+
+        if status_code == 301:
+            return "301 Moved Permanently"
+
+        if status_code == 404:
+            return "404 Not Found"
+
+        if status_code == 405:
+            return "405 Method Not Allowed"
+
+        if status_code == 400:
+            return "400 Bad Request"
+
+    def create_field(self, field_name, field_value):
+        return field_name + ": " + field_value + "\r\n"
     
-    def template_res(self):
+    def template_res(self, has_content_type=True, more=[]):
         res = "{http_ver} {status}\r\n"
         res += "Server: localhost\r\n"
-        res += f"Date: {date.today()}\r\n"
-        res += "Content-Type: {content_type}\r\n\r\n"
+
+        now = datetime.now()
+        formatted_now = now.strftime("%a, %d %b %Y %H:%M:%S")
+        res += f"Date: {formatted_now}\r\n"
+        
+        if has_content_type:
+            res += "Content-Type: {content_type}\r\n"
+            res += "Content-Length: {content_length}\r\n"
+        
+        for field in more:
+            res += field
+        
+        res += "\r\n"
+
         res += "{payload}"
         return res
-
-    def handle_get(self):
-        pass
-
-    def handle_bad_req(self):
-        pass
 
 
 if __name__ == "__main__":

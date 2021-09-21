@@ -158,6 +158,10 @@ class HttpReqParser:
 
         raise error
 
+# DEBUG CODE:
+# Uncomment and run http_req_parser.py
+# request can be changed to contain the desired headers
+# Prints out the result of the parsing
 # if __name__ == "__main__":
 #     request = b"GET / HTTP/1.1\r\nHost: slashdot.org\r\nAccept: python\r\nAgent: text/html\r\n\r\n"
 #     parsed_data = HttpReqParser.parse(request)

@@ -33,6 +33,8 @@ class ResourceLocator:
             path += cls.index_f
 
         full_path = join(root + path)
+        # DEBUG CODE:
+        # Uncomment to print path information
         # print("path", path)
         # print("full path", full_path)
         # print("root", root)

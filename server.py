@@ -1,7 +1,7 @@
 #  coding: utf-8 
 import socketserver
 
-# Copyright 2013 Abram Hindle, Eddie Antonio Santos
+# Copyright 2013 Abram Hindle, Eddie Antonio Santos, Olivier Vadiavaloo
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import socketserver
 
 from http_req_parser import *
 from resource_locator import ResourceLocator
-from datetime import datetime
+from time import gmtime, strftime
 from os.path import join
 
 class MyWebServer(socketserver.BaseRequestHandler):
@@ -36,6 +36,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
     basepath = "www"
     baseurl = "http://127.0.0.1:8080"
     default_http_ver = "HTTP/1.1"
+    charset = "utf-8"
 
     def setup(self):
         self.httpvername = HttpReqParser.httpvername
@@ -77,7 +78,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
 
         # check for accepted content-type
         if content_type is not None:
-            content_type = "text/" + content_type
+            content_type = "text/" + content_type + f"; charset={self.charset}"
 
             if accept is None:
                 accept = "*/*"
@@ -106,6 +107,8 @@ class MyWebServer(socketserver.BaseRequestHandler):
                 payload=payload
             )
 
+        # DEBUG CODE:
+        # Uncomment to see request and response
         # print("="*30)
         # print(self.data)
         # print("_"*40)
@@ -154,15 +157,15 @@ class MyWebServer(socketserver.BaseRequestHandler):
     
     def template_res(self, has_content_type=True, more=[]):
         res = "{http_ver} {status}\r\n"
-        res += "Server: localhost\r\n"
 
-        now = datetime.now()
-        formatted_now = now.strftime("%a, %d %b %Y %H:%M:%S")
-        res += f"Date: {formatted_now}\r\n"
+        formatted_gmtime = strftime("%a, %d %b %Y %H:%M:%S %p %Z", gmtime())
+        res += f"Date: {formatted_gmtime}\r\n"
         
         if has_content_type:
             res += "Content-Type: {content_type}\r\n"
             res += "Content-Length: {content_length}\r\n"
+
+        res += "Connection: close\r\n"
         
         for field in more:
             res += field

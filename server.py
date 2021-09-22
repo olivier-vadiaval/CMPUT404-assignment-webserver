@@ -30,6 +30,7 @@ from http_req_parser import *
 from resource_locator import ResourceLocator
 from time import gmtime, strftime
 from os.path import join
+from urllib.parse import quote
 
 class MyWebServer(socketserver.BaseRequestHandler):
 

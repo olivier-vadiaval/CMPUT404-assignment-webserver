@@ -14,6 +14,7 @@
 
 import os
 from os.path import *
+from urllib.parse import quote, unquote
 
 class ResourceLocator:
     index_f = "index.html"
@@ -32,7 +33,7 @@ class ResourceLocator:
         if path[-1] == "/":
             path += cls.index_f
 
-        full_path = join(root + path)
+        full_path = join(root + unquote(path))
         # DEBUG CODE:
         # Uncomment to print path information
         # print("path", path)
@@ -46,7 +47,7 @@ class ResourceLocator:
             return 404, "", None
 
         try:
-            with open(full_path) as file_descr:
+            with open(full_path, "r") as file_descr:
                 payload = file_descr.read()
                 return 200, payload, cls.get_filetype(file_descr)
 
@@ -56,3 +57,13 @@ class ResourceLocator:
 
         except FileNotFoundError:
             return 404, "", None
+
+
+# DEBUG CODE:
+# Uncomment code and run "python resource_locator.py"
+# Must create a file called snowman.txt (where snowman
+# is the snowman image!) in a testing_dir directory
+# if __name__ == "__main__":
+#     code, payload, content_type = ResourceLocator.find("/%e2%98%83.txt", "testing_dir")
+#     print(content_type)
+#     print(payload)

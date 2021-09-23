@@ -47,10 +47,10 @@ class HttpReqParser:
 
         # Decode unparsed data
         decoded_u_data = unparsed_data.decode("utf-8")
-        decoded_u_data += "\r\n\r\n"
 
         # Split over CR-LF
-        splitted_data = decoded_u_data.split("\r\n")
+        splitted_data = decoded_u_data.split("\r\n\r\n")
+        splitted_data = splitted_data[0].split("\r\n")
         splitted_data_len = len(splitted_data)
         
         start_line = splitted_data[0]
@@ -109,9 +109,12 @@ class HttpReqParser:
         return parsed_data
 
     @classmethod
-    def get_field(cls, fields, field_str, end="\r\n"):
+    def get_field(cls, fields, field_str):
         for field in fields:
             splitted_field = field.split(": ")
+            if len(splitted_field) == 1:
+                raise BadRequest
+            
             if field_str == splitted_field[0]:
                 return splitted_field[1]
 

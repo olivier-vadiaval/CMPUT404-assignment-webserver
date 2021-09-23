@@ -47,9 +47,11 @@ class MyWebServer(socketserver.BaseRequestHandler):
         self.acceptname = HttpReqParser.acceptname
     
     def handle(self):
-        self.data = self.request.recv(4096).strip()
-        # print ("Got a request of: %s\n" % self.data)
-        # self.request.sendall(bytearray("OK",'utf-8'))
+        self.data = b""
+        while True:
+            self.data += self.request.recv(4096)
+            if self.data.find(b"\r\n\r\n") != -1:
+                break
 
         code = -1
         http_version = self.default_http_ver
@@ -79,7 +81,12 @@ class MyWebServer(socketserver.BaseRequestHandler):
 
         # check for accepted content-type
         if content_type is not None:
-            content_type = "text/" + content_type + f"; charset={self.charset}"
+            if content_type != "html" and content_type != "css":
+                content_type = "application/octet-stream"
+            else:
+                content_type = "text/" + content_type
+
+            content_type += f"; charset={self.charset}"
 
             if accept is None:
                 accept = "*/*"

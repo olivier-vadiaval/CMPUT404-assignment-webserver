@@ -18,11 +18,10 @@ server.py contains contributions from:
 * Eddie Antonio Santos
 * Jackson Z Chang
 * Mandy Meindersma
-
-Assignment Submitted by:
 * Olivier Vadiavaloo
 
-No collaborators on Olivier's assignment solution.
+Collaborator:
+* Michelle Wang
 
 But the server.py example is derived from the python documentation
 examples thus some of the code is Copyright © 2001-2013 Python
